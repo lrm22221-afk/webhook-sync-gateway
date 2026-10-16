@@ -1,0 +1,3 @@
+enum OrderStatus { pending paid refunded }
+type Order { id: ID! email: String! totalCents: Int! currency: String! status: OrderStatus! crmContactId: String }
+type Query { order(id: ID!): Order  orders(status: OrderStatus): [Order!]! }

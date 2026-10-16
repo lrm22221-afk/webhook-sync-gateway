@@ -1,0 +1,199 @@
+{
+  "info": {
+    "name": "Webhook Sync Gateway",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "health",
+      "request": {
+        "method": "GET",
+        "url": "{{base}}/health",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "order webhook (signed)",
+      "request": {
+        "method": "POST",
+        "url": "{{base}}/webhooks/orders",
+        "header": [
+          {
+            "key": "x-shop-event-id",
+            "value": "pm_e1"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"id\": \"pm_1\", \"email\": \"Postman@Example.com\", \"total_price\": \"19.99\", \"currency\": \"USD\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "const raw = pm.request.body.raw; const sig = require(\"crypto-js\").HmacSHA256(raw, pm.variables.get('shopSecret')).toString(require(\"crypto-js\").enc.Base64); pm.request.headers.upsert({key:'x-shop-hmac-sha256', value: sig});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('accepted', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "order webhook (unsigned)",
+      "request": {
+        "method": "POST",
+        "url": "{{base}}/webhooks/orders",
+        "header": [
+          {
+            "key": "x-shop-event-id",
+            "value": "pm_e2"
+          },
+          {
+            "key": "x-shop-hmac-sha256",
+            "value": "forged"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"id\": \"pm_1\", \"email\": \"Postman@Example.com\", \"total_price\": \"19.99\", \"currency\": \"USD\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('401 on forged signature', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "order webhook (redelivery)",
+      "request": {
+        "method": "POST",
+        "url": "{{base}}/webhooks/orders",
+        "header": [
+          {
+            "key": "x-shop-event-id",
+            "value": "pm_e1"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"id\": \"pm_1\", \"email\": \"Postman@Example.com\", \"total_price\": \"19.99\", \"currency\": \"USD\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "const raw = pm.request.body.raw; const sig = require(\"crypto-js\").HmacSHA256(raw, pm.variables.get('shopSecret')).toString(require(\"crypto-js\").enc.Base64); pm.request.headers.upsert({key:'x-shop-hmac-sha256', value: sig});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('duplicate flagged', () => pm.expect(pm.response.json().duplicate).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "payment webhook",
+      "request": {
+        "method": "POST",
+        "url": "{{base}}/webhooks/payments",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"id\": \"evt_pm1\", \"type\": \"payment_intent.succeeded\", \"data\": {\"object\": {\"metadata\": {\"order_id\": \"pm_1\"}}}}"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "const raw = pm.request.body.raw; const t = Math.floor(Date.now()/1000); const sig = require(\"crypto-js\").HmacSHA256(t + '.' + raw, pm.variables.get('paySecret')).toString(require(\"crypto-js\").enc.Hex); pm.request.headers.upsert({key:'x-pay-signature', value: 't=' + t + ',v1=' + sig});"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('paid', () => pm.expect(pm.response.json().status).to.eql('paid'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "GET order (contract)",
+      "request": {
+        "method": "GET",
+        "url": "{{base}}/orders/pm_1",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const schema = {type:'object', required:['id','email','totalCents','currency','status'], additionalProperties:false, properties:{id:{type:'string'},email:{type:'string'},totalCents:{type:'integer'},currency:{type:'string'},status:{enum:['pending','paid','refunded']},crmContactId:{type:'string'}}};",
+              "pm.test('matches contract', () => pm.response.to.have.jsonSchema(schema));",
+              "pm.test('synced to CRM', () => pm.expect(pm.response.json().crmContactId).to.match(/^c_/));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "GraphQL orders",
+      "request": {
+        "method": "POST",
+        "url": "{{base}}/graphql",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"query\": \"{orders(status: paid){id totalCents}}\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('graphql returns paid order', () => pm.expect(pm.response.json().data.orders.map(o=>o.id)).to.include('pm_1'));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

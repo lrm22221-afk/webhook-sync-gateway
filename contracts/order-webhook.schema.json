@@ -1,0 +1,4 @@
+{ "$id": "order-webhook", "type": "object", "additionalProperties": true,
+  "required": ["id", "email", "total_price", "currency"],
+  "properties": { "id": { "type": "string", "minLength": 1 }, "email": { "type": "string", "pattern": "^[^@\\s]+@[^@\\s]+$" },
+    "total_price": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" }, "currency": { "type": "string", "pattern": "^[A-Z]{3}$" } } }

@@ -1,0 +1,5 @@
+{ "$id": "payment-event", "type": "object", "required": ["id", "type", "data"],
+  "properties": { "id": { "type": "string", "pattern": "^evt_" },
+    "type": { "enum": ["payment_intent.succeeded", "charge.refunded"] },
+    "data": { "type": "object", "required": ["object"], "properties": { "object": { "type": "object", "required": ["metadata"],
+      "properties": { "metadata": { "type": "object", "required": ["order_id"], "properties": { "order_id": { "type": "string" } } } } } } } } }
